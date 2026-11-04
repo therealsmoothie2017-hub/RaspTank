@@ -1,7 +1,42 @@
 /**
  * Gamepad API Manager for Xbox and PlayStation Controllers
- * Supports standard mapping, deadzones, rumble, and stick visualizer.
+ * Supports standard mapping, deadzones, rumble, custom button rebinds, and visualizer.
  */
+
+const DEFAULT_BINDINGS = {
+  take_wheel: { index: 3, label: 'Y / △' },
+  e_stop: { index: 1, label: 'B / ○' },
+  lights: { index: 2, label: 'X / □' },
+  horn: { index: 0, label: 'A / ✕' },
+  cam_up: { index: 12, label: 'D-Pad Up' },
+  cam_down: { index: 13, label: 'D-Pad Down' },
+  cam_center: { index: 11, label: 'R-Stick Click' }
+};
+
+function getButtonLabel(btnIndex, gpId = '') {
+  const isPS = /sony|playstation|dualshock|dualsense/i.test(gpId);
+  const labels = {
+    0: isPS ? '✕ (Cross)' : 'A Button',
+    1: isPS ? '○ (Circle)' : 'B Button',
+    2: isPS ? '□ (Square)' : 'X Button',
+    3: isPS ? '△ (Triangle)' : 'Y Button',
+    4: isPS ? 'L1 Bumper' : 'LB Bumper',
+    5: isPS ? 'R1 Bumper' : 'RB Bumper',
+    6: isPS ? 'L2 Trigger' : 'LT Trigger',
+    7: isPS ? 'R2 Trigger' : 'RT Trigger',
+    8: isPS ? 'Share / Select' : 'View / Back',
+    9: isPS ? 'Options / Start' : 'Menu / Start',
+    10: 'L-Stick Click',
+    11: 'R-Stick Click',
+    12: 'D-Pad Up',
+    13: 'D-Pad Down',
+    14: 'D-Pad Left',
+    15: 'D-Pad Right',
+    16: isPS ? 'PS Home' : 'Xbox Home'
+  };
+  return labels[btnIndex] || `Button ${btnIndex}`;
+}
+
 class GamepadManager {
   constructor(options = {}) {
     this.deadzone = options.deadzone || 0.12;
@@ -9,6 +44,10 @@ class GamepadManager {
     this.mode = options.mode || 'arcade'; // 'arcade' or 'tank'
     this.connectedIndex = null;
     this.prevButtons = {};
+    this.listeningAction = null;
+    this.onRebindComplete = null;
+    this.bindings = this.loadBindings();
+
     this.onButtonDown = options.onButtonDown || (() => {});
     this.onDriveInput = options.onDriveInput || (() => {});
     this.onStatusChange = options.onStatusChange || (() => {});
@@ -23,6 +62,38 @@ class GamepadManager {
 
     this.initListeners();
     this.startPollLoop();
+  }
+
+  loadBindings() {
+    try {
+      const saved = localStorage.getItem('rasptank_bindings');
+      if (saved) {
+        return Object.assign({}, DEFAULT_BINDINGS, JSON.parse(saved));
+      }
+    } catch (e) {}
+    return Object.assign({}, DEFAULT_BINDINGS);
+  }
+
+  saveBindings() {
+    try {
+      localStorage.setItem('rasptank_bindings', JSON.stringify(this.bindings));
+    } catch (e) {}
+  }
+
+  resetBindings() {
+    this.bindings = Object.assign({}, DEFAULT_BINDINGS);
+    this.saveBindings();
+    return this.bindings;
+  }
+
+  startListening(actionName, callback) {
+    this.listeningAction = actionName;
+    this.onRebindComplete = callback;
+  }
+
+  cancelListening() {
+    this.listeningAction = null;
+    this.onRebindComplete = null;
   }
 
   initListeners() {
@@ -62,7 +133,6 @@ class GamepadManager {
 
   applyDeadzone(val) {
     if (Math.abs(val) < this.deadzone) return 0;
-    // Rescale linearly outside deadzone
     const sign = Math.sign(val);
     return sign * ((Math.abs(val) - this.deadzone) / (1 - this.deadzone));
   }
@@ -91,7 +161,6 @@ class GamepadManager {
 
   update() {
     if (this.connectedIndex === null) {
-      // Check if any controller is available if not yet bound
       const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
       for (let i = 0; i < gamepads.length; i++) {
         if (gamepads[i]) {
@@ -107,11 +176,26 @@ class GamepadManager {
     const gp = gamepads[this.connectedIndex];
     if (!gp) return;
 
-    // Standard Gamepad Axes:
-    // Axis 0: Left Stick X (-1.0 Left to +1.0 Right)
-    // Axis 1: Left Stick Y (-1.0 Up to +1.0 Down)
-    // Axis 2: Right Stick X
-    // Axis 3: Right Stick Y
+    // --- REBIND CAPTURE MODE ---
+    if (this.listeningAction) {
+      for (let i = 0; i < gp.buttons.length; i++) {
+        const btn = gp.buttons[i];
+        if (btn && (btn.pressed || btn.value > 0.5)) {
+          const label = getButtonLabel(i, gp.id);
+          this.bindings[this.listeningAction] = { index: i, label: label };
+          this.saveBindings();
+          const action = this.listeningAction;
+          const cb = this.onRebindComplete;
+          this.listeningAction = null;
+          this.onRebindComplete = null;
+          this.rumble(0.5, 120);
+          if (cb) cb(action, label, i);
+          return;
+        }
+      }
+    }
+
+    // Axes: Standard Gamepad Layout
     const rawLx = gp.axes[0] || 0;
     const rawLy = gp.axes[1] || 0;
     const rawRx = gp.axes[2] || 0;
@@ -122,7 +206,6 @@ class GamepadManager {
     const rx = this.applyDeadzone(rawRx);
     const ry = this.applyDeadzone(rawRy);
 
-    // Triggers: Standard Button 6 (LT/L2) and Button 7 (RT/R2)
     const lt = gp.buttons[6] ? gp.buttons[6].value : 0;
     const rt = gp.buttons[7] ? gp.buttons[7].value : 0;
 
@@ -135,51 +218,35 @@ class GamepadManager {
     }
     if (this.ltFill) this.ltFill.style.height = `${Math.round(lt * 100)}%`;
     if (this.rtFill) this.rtFill.style.height = `${Math.round(rt * 100)}%`;
-
     if (this.vectorIndicator) {
       this.vectorIndicator.style.transform = `translate(${lx * 50}px, ${ly * 50}px)`;
     }
 
-    // Check button click edges (0: A/Cross, 1: B/Circle, 2: X/Square, 3: Y/Triangle)
-    const checkEdge = (btnIndex, actionName) => {
-      const isDown = gp.buttons[btnIndex] && gp.buttons[btnIndex].pressed;
-      const wasDown = this.prevButtons[btnIndex] || false;
+    // Dynamic Edge Detection for All Bindings
+    for (const [actionName, binding] of Object.entries(this.bindings)) {
+      const idx = binding.index;
+      const isDown = gp.buttons[idx] && (gp.buttons[idx].pressed || gp.buttons[idx].value > 0.5);
+      const wasDown = this.prevButtons[idx] || false;
       if (isDown && !wasDown) {
-        this.onButtonDown(actionName, btnIndex);
+        this.onButtonDown(actionName, idx);
         this.rumble(0.2, 80);
       }
-      this.prevButtons[btnIndex] = isDown;
-    };
+      this.prevButtons[idx] = isDown;
+    }
 
-    checkEdge(0, 'A_CROSS');       // Horn / Select
-    checkEdge(1, 'B_CIRCLE');      // Brake / E-Stop
-    checkEdge(2, 'X_SQUARE');      // Lights toggle
-    checkEdge(3, 'Y_TRIANGLE');    // Take Wheel / Pass Wheel
-    checkEdge(12, 'DPAD_UP');      // Camera Up
-    checkEdge(13, 'DPAD_DOWN');    // Camera Down
-    checkEdge(14, 'DPAD_LEFT');    // Camera Left
-    checkEdge(15, 'DPAD_RIGHT');   // Camera Right
-
-    // Calculate Motor Speeds (-100 to +100)
+    // Motor Calculations
     let leftSpeed = 0;
     let rightSpeed = 0;
 
     if (this.mode === 'arcade') {
-      // Throttle from Left Stick Y (negative is forward) or RT/LT
       let throttle = -ly;
-      // Alternative: Triggers can drive (RT forward, LT reverse)
       if (rt > 0.05 || lt > 0.05) {
         throttle = (rt - lt);
       }
-
-      // Steering from Left Stick X or Right Stick X
       let steer = (Math.abs(rx) > Math.abs(lx)) ? rx : lx;
-
-      // Differential drive mixing
       let left = throttle + steer;
       let right = throttle - steer;
 
-      // Normalize if exceeding [-1, 1]
       const maxVal = Math.max(Math.abs(left), Math.abs(right), 1.0);
       left = (left / maxVal) * this.maxSpeed;
       right = (right / maxVal) * this.maxSpeed;
@@ -187,14 +254,12 @@ class GamepadManager {
       leftSpeed = Math.round(left * 100);
       rightSpeed = Math.round(right * 100);
     } else {
-      // Dual-Stick Tank Mode (Left stick drives left track, Right stick drives right track)
       const left = -ly * this.maxSpeed;
       const right = -ry * this.maxSpeed;
       leftSpeed = Math.round(left * 100);
       rightSpeed = Math.round(right * 100);
     }
 
-    // Camera Pan/Tilt from Right Stick (in arcade mode)
     let camTilt = 0;
     let camPan = 0;
     if (this.mode === 'arcade') {
@@ -212,4 +277,3 @@ class GamepadManager {
 }
 
 window.GamepadManager = GamepadManager;
-

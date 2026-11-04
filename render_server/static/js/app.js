@@ -100,18 +100,20 @@ document.addEventListener('DOMContentLoaded', () => {
     mode: 'arcade',
     onButtonDown: (action) => {
       sfx.playBeep(1200, 0.04);
-      if (action === 'Y_TRIANGLE') {
+      if (action === 'take_wheel') {
         toggleWheel();
-      } else if (action === 'B_CIRCLE') {
+      } else if (action === 'e_stop') {
         emergencyStop();
-      } else if (action === 'X_SQUARE') {
+      } else if (action === 'lights') {
         toggleLight();
-      } else if (action === 'A_CROSS') {
+      } else if (action === 'horn') {
         triggerHorn();
-      } else if (action === 'DPAD_UP') {
+      } else if (action === 'cam_up') {
         sendCameraTilt('up');
-      } else if (action === 'DPAD_DOWN') {
+      } else if (action === 'cam_down') {
         sendCameraTilt('down');
+      } else if (action === 'cam_center') {
+        sendCameraTilt('center');
       }
     },
     onDriveInput: (input) => {
@@ -120,6 +122,84 @@ document.addEventListener('DOMContentLoaded', () => {
       lastDrivePacket = input;
     }
   });
+
+  // --- CONTROLLER REBIND MENU CONTROLLER ---
+  const rebindPrompt = document.getElementById('rebind-prompt');
+  const btnResetBindings = document.getElementById('btn-reset-bindings');
+  const bindButtons = document.querySelectorAll('.btn-bind');
+
+  function refreshRebindUI() {
+    bindButtons.forEach(btn => {
+      const action = btn.dataset.action;
+      const binding = gamepad.bindings[action];
+      if (binding) {
+        btn.textContent = binding.label;
+      }
+      btn.classList.remove('listening');
+    });
+    if (rebindPrompt) {
+      rebindPrompt.textContent = "Click an action below, then press any button on your controller.";
+      rebindPrompt.classList.remove('listening');
+    }
+  }
+
+  bindButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+
+      // Cancel previous listening if any
+      gamepad.cancelListening();
+      bindButtons.forEach(b => b.classList.remove('listening'));
+
+      btn.classList.add('listening');
+      btn.textContent = "[ PRESS BUTTON... ]";
+
+      if (rebindPrompt) {
+        rebindPrompt.textContent = `Listening for: "${action.toUpperCase().replace('_', ' ')}"... Press a controller button now.`;
+        rebindPrompt.classList.add('listening');
+      }
+
+      gamepad.startListening(action, (act, label, index) => {
+        btn.textContent = label;
+        btn.classList.remove('listening');
+        if (rebindPrompt) {
+          rebindPrompt.textContent = `Bound "${act.toUpperCase().replace('_', ' ')}" to ${label}!`;
+          rebindPrompt.classList.remove('listening');
+        }
+        showBanner(`🎮 Rebound: ${label}`);
+        sfx.playBeep(900, 0.1);
+      });
+    });
+  });
+
+  if (btnResetBindings) {
+    btnResetBindings.addEventListener('click', () => {
+      gamepad.resetBindings();
+      refreshRebindUI();
+      sfx.playAlert();
+      showBanner("Controller mappings reset to default!");
+    });
+  }
+
+  refreshRebindUI();
+
+  // --- THEATER / EXPANDED VIEWPORT TOGGLE ---
+  const btnToggleViewport = document.getElementById('btn-toggle-viewport');
+  const viewportBtnText = document.getElementById('viewport-btn-text');
+  const cockpitContainer = document.querySelector('.cockpit-container');
+
+  if (btnToggleViewport) {
+    btnToggleViewport.addEventListener('click', () => {
+      cockpitContainer.classList.toggle('theater-mode');
+      const isTheater = cockpitContainer.classList.contains('theater-mode');
+      if (viewportBtnText) {
+        viewportBtnText.textContent = isTheater ? 'NORMAL VIEW' : 'EXPAND VIEW';
+      }
+      btnToggleViewport.querySelector('.icon').textContent = isTheater ? '🗗' : '⛶';
+      sfx.playBeep(isTheater ? 880 : 660, 0.08);
+      showBanner(isTheater ? "📺 Expanded Theater Viewport" : "🖥️ Standard Cockpit View");
+    });
+  }
 
   // Slider Listeners
   sliderSpeed.addEventListener('input', (e) => {
@@ -202,13 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  btnTakeWheel.addEventListener('click', toggleWheel);
-  btnEStop.addEventListener('click', emergencyStop);
-  btnLight.addEventListener('click', toggleLight);
-  btnHorn.addEventListener('click', triggerHorn);
-  document.getElementById('cam-up').addEventListener('click', () => sendCameraTilt('up'));
-  document.getElementById('cam-center').addEventListener('click', () => sendCameraTilt('center'));
-  document.getElementById('cam-down').addEventListener('click', () => sendCameraTilt('down'));
+  if (btnTakeWheel) btnTakeWheel.addEventListener('click', toggleWheel);
+  if (btnEStop) btnEStop.addEventListener('click', emergencyStop);
+  if (btnLight) btnLight.addEventListener('click', toggleLight);
+  if (btnHorn) btnHorn.addEventListener('click', triggerHorn);
 
   // --- KEYBOARD FALLBACK (WASD / Arrows) ---
   const activeKeys = {};

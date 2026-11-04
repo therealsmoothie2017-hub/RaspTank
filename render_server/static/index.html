@@ -95,6 +95,11 @@
         <!-- Tactical Warnings / Announcements -->
         <div id="announcement-banner" class="hud-banner"></div>
 
+        <!-- Viewport Expand / Theater Toggle -->
+        <button id="btn-toggle-viewport" class="hud-theater-btn" title="Toggle Expanded / Theater View">
+          <span class="icon">⛶</span> <span id="viewport-btn-text">EXPAND VIEW</span>
+        </button>
+
         <!-- Emergency Brake Button Overlay -->
         <button id="btn-e-stop" class="hud-estop" title="Emergency Stop (Space / B)">E-STOP</button>
       </div>
@@ -129,23 +134,44 @@
           </div>
         </div>
 
-        <div class="panel-card">
-          <h3 class="card-title">ACCESSORIES</h3>
-          <div class="btn-grid">
-            <button id="btn-light" class="btn-tool">
-              <span class="icon">💡</span> Headlights [X]
-            </button>
-            <button id="btn-horn" class="btn-tool">
-              <span class="icon">📢</span> Horn [A]
-            </button>
+        <!-- Custom Controller Rebind Menu -->
+        <div class="panel-card rebind-card">
+          <div class="rebind-card-header">
+            <h3 class="card-title">CONTROLLER REBIND</h3>
+            <button id="btn-reset-bindings" class="btn-reset" title="Reset bindings to default">RESET</button>
           </div>
+          <p class="rebind-instruction" id="rebind-prompt">
+            Click an action below, then press any button on your controller.
+          </p>
 
-          <div class="camera-ptz">
-            <span class="ptz-title">CAMERA TILT</span>
-            <div class="ptz-controls">
-              <button id="cam-up" class="btn-mini">▲ Up</button>
-              <button id="cam-center" class="btn-mini">● Center</button>
-              <button id="cam-down" class="btn-mini">▼ Down</button>
+          <div class="rebind-table" id="rebind-container">
+            <div class="rebind-row">
+              <span class="rebind-label">Take Wheel:</span>
+              <button class="btn-bind" data-action="take_wheel">Y / △ (Btn 3)</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">E-Stop / Brake:</span>
+              <button class="btn-bind" data-action="e_stop">B / ○ (Btn 1)</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">Headlights:</span>
+              <button class="btn-bind" data-action="lights">X / □ (Btn 2)</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">Horn / Honk:</span>
+              <button class="btn-bind" data-action="horn">A / ✕ (Btn 0)</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">Camera Tilt Up:</span>
+              <button class="btn-bind" data-action="cam_up">D-Pad Up</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">Camera Tilt Down:</span>
+              <button class="btn-bind" data-action="cam_down">D-Pad Down</button>
+            </div>
+            <div class="rebind-row">
+              <span class="rebind-label">Camera Center:</span>
+              <button class="btn-bind" data-action="cam_center">R-Stick Click</button>
             </div>
           </div>
         </div>
