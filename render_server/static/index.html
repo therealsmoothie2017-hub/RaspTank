@@ -132,6 +132,18 @@
             </div>
             <input type="range" id="slider-deadzone" min="5" max="30" value="12" step="1">
           </div>
+
+          <!-- Invert Sticks Toggles -->
+          <div class="invert-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-invert-y">
+              <span>Invert Forward / Backward</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-invert-x">
+              <span>Invert Left / Right</span>
+            </label>
+          </div>
         </div>
 
         <!-- Custom Controller Rebind Menu -->
@@ -180,7 +192,7 @@
       <!-- Right Control Panel: Crew Roster & Live Controller Visualizer -->
       <aside class="hud-sidebar hud-sidebar-right">
         <div class="panel-card">
-          <h3 class="card-title">CREW ROSTER (<span id="user-count">0</span>/3)</h3>
+          <h3 class="card-title">CREW ROSTER (<span id="user-count">0</span>/4)</h3>
           <ul id="crew-list" class="crew-list">
             <li class="crew-item placeholder">Waiting for friends to join...</li>
           </ul>

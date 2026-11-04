@@ -214,6 +214,30 @@ document.addEventListener('DOMContentLoaded', () => {
     gamepad.deadzone = parseFloat(val) / 100;
   });
 
+  // Invert Checkboxes
+  const checkInvertY = document.getElementById('check-invert-y');
+  const checkInvertX = document.getElementById('check-invert-x');
+
+  if (checkInvertY) {
+    checkInvertY.checked = gamepad.invertThrottle;
+    checkInvertY.addEventListener('change', (e) => {
+      gamepad.invertThrottle = e.target.checked;
+      localStorage.setItem('rasptank_invert_y', e.target.checked ? 'true' : 'false');
+      sfx.playBeep(gamepad.invertThrottle ? 800 : 600, 0.05);
+      showBanner(gamepad.invertThrottle ? "🔄 Throttle Inverted" : "Normal Throttle");
+    });
+  }
+
+  if (checkInvertX) {
+    checkInvertX.checked = gamepad.invertSteer;
+    checkInvertX.addEventListener('change', (e) => {
+      gamepad.invertSteer = e.target.checked;
+      localStorage.setItem('rasptank_invert_x', e.target.checked ? 'true' : 'false');
+      sfx.playBeep(gamepad.invertSteer ? 800 : 600, 0.05);
+      showBanner(gamepad.invertSteer ? "🔄 Steering Inverted" : "Normal Steering");
+    });
+  }
+
   // Drive Mode Toggles
   document.querySelectorAll('input[name="drive-mode"]').forEach((radio) => {
     radio.parentElement.addEventListener('click', () => {
@@ -321,6 +345,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (activeKeys['KeyS'] || activeKeys['ArrowDown']) fwd -= 1;
     if (activeKeys['KeyA'] || activeKeys['ArrowLeft']) turn -= 1;
     if (activeKeys['KeyD'] || activeKeys['ArrowRight']) turn += 1;
+
+    if (gamepad.invertThrottle) fwd = -fwd;
+    if (gamepad.invertSteer) turn = -turn;
 
     const speed = gamepad.maxSpeed;
     let left = (fwd + turn) * speed;

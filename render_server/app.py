@@ -160,6 +160,13 @@ async def websocket_handler(request):
         await ws.close(code=4403, message=b"Forbidden")
         return ws
 
+    # Max 4 Operators in roster
+    if len(clients) >= 4:
+        logger.warning(f"Client {username} rejected: Roster full ({len(clients)}/4)")
+        await ws.send_json({"type": "error", "message": "Cockpit roster is full (Maximum 4 crew members)"})
+        await ws.close(code=4429, message=b"Room Full")
+        return ws
+
     clients[ws] = {
         "id": client_id,
         "name": username,

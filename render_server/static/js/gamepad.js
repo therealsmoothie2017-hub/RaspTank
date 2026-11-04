@@ -42,6 +42,8 @@ class GamepadManager {
     this.deadzone = options.deadzone || 0.12;
     this.maxSpeed = options.maxSpeed || 0.8;
     this.mode = options.mode || 'arcade'; // 'arcade' or 'tank'
+    this.invertThrottle = localStorage.getItem('rasptank_invert_y') === 'true';
+    this.invertSteer = localStorage.getItem('rasptank_invert_x') === 'true';
     this.connectedIndex = null;
     this.prevButtons = {};
     this.listeningAction = null;
@@ -240,10 +242,16 @@ class GamepadManager {
 
     if (this.mode === 'arcade') {
       let throttle = -ly;
+      if (this.invertThrottle) throttle = -throttle;
+
       if (rt > 0.05 || lt > 0.05) {
         throttle = (rt - lt);
+        if (this.invertThrottle) throttle = -throttle;
       }
+
       let steer = (Math.abs(rx) > Math.abs(lx)) ? rx : lx;
+      if (this.invertSteer) steer = -steer;
+
       let left = throttle + steer;
       let right = throttle - steer;
 
@@ -254,8 +262,19 @@ class GamepadManager {
       leftSpeed = Math.round(left * 100);
       rightSpeed = Math.round(right * 100);
     } else {
-      const left = -ly * this.maxSpeed;
-      const right = -ry * this.maxSpeed;
+      let left = -ly * this.maxSpeed;
+      let right = -ry * this.maxSpeed;
+
+      if (this.invertThrottle) {
+        left = -left;
+        right = -right;
+      }
+      if (this.invertSteer) {
+        const temp = left;
+        left = right;
+        right = temp;
+      }
+
       leftSpeed = Math.round(left * 100);
       rightSpeed = Math.round(right * 100);
     }
