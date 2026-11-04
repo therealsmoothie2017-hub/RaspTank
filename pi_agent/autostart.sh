@@ -39,3 +39,4 @@ systemctl restart tank-agent
 echo ""
 echo "=== SUCCESS! RaspTank will now auto-start whenever powered on! ==="
 systemctl status tank-agent --no-pager
+
