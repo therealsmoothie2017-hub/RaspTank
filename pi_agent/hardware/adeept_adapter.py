@@ -9,14 +9,33 @@ import glob
 import time
 import cv2
 
-# Look for Adeept RaspTank server directory in common locations
+# Look for Adeept RaspTank directory
 ADEEPT_SEARCH_PATHS = [
+    "/home/addy/adeept_rasptank2/web",
+    "/home/addy/adeept_rasptank2/server",
+    "/home/addy/rasptank/web",
+    "/home/addy/rasptank/server",
+    os.path.expanduser("~/adeept_rasptank2/web"),
     os.path.expanduser("~/adeept_rasptank2/server"),
-    os.path.expanduser("~/adeept_rasptank/server"),
+    os.path.expanduser("~/rasptank/web"),
     os.path.expanduser("~/rasptank/server"),
-    "/home/pi/adeept_rasptank2/server",
-    "/home/pi/adeept_rasptank/server"
+    "/home/pi/adeept_rasptank2/web",
+    "/home/pi/adeept_rasptank2/server"
 ]
+
+# Dynamically find any folder containing Adeept's move.py in /home or user's home directory
+search_roots = ["/home", os.path.expanduser("~")]
+try:
+    for s_root in search_roots:
+        if os.path.isdir(s_root):
+            for root, dirs, files in os.walk(s_root):
+                if "move.py" in files and "pi_agent" not in root and "hardware" not in root:
+                    if root not in ADEEPT_SEARCH_PATHS:
+                        ADEEPT_SEARCH_PATHS.insert(0, root)
+                        print(f"[AdeeptAdapter] Found Adeept module directory at: {root}")
+                        break
+except Exception as e:
+    print(f"[AdeeptAdapter] Search notice: {e}")
 
 for p in ADEEPT_SEARCH_PATHS:
     if os.path.isdir(p) and p not in sys.path:
@@ -54,15 +73,40 @@ class AdeeptTankAdapter:
         h = self.config.get("camera", {}).get("height", 480)
         fps = self.config.get("camera", {}).get("fps", 25)
 
+        # 1. First attempt: Direct V4L2 with MJPEG (prevents GStreamer memory error)
+        if hasattr(cv2, 'CAP_V4L2'):
+            try:
+                cap = cv2.VideoCapture(device_idx, cv2.CAP_V4L2)
+                if cap.isOpened():
+                    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+                    cap.set(cv2.CAP_PROP_FPS, fps)
+                    ret, test_frame = cap.read()
+                    if ret and test_frame is not None:
+                        self.cap = cap
+                        print(f"[AdeeptAdapter] Camera initialized via V4L2 MJPEG on index {device_idx}!")
+                        return
+                    cap.release()
+            except Exception as e:
+                print(f"[AdeeptAdapter] V4L2 probe: {e}")
+
+        # 2. Second attempt: Standard OpenCV capture
         try:
-            self.cap = cv2.VideoCapture(device_idx)
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-            self.cap.set(cv2.CAP_PROP_FPS, fps)
-            if not self.cap.isOpened():
-                print(f"[AdeeptAdapter] Warning: Camera index {device_idx} could not be opened.")
+            cap = cv2.VideoCapture(device_idx)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
+                ret, test_frame = cap.read()
+                if ret and test_frame is not None:
+                    self.cap = cap
+                    print(f"[AdeeptAdapter] Camera initialized via standard backend on index {device_idx}!")
+                    return
+                cap.release()
         except Exception as e:
-            print(f"[AdeeptAdapter] Camera init error: {e}")
+            print(f"[AdeeptAdapter] Standard backend error: {e}")
+
+        print("[AdeeptAdapter] WARNING: Camera could not be opened. If busy, run: sudo fuser -k /dev/video0")
 
     def get_frame(self):
         if self.cap and self.cap.isOpened():
@@ -81,29 +125,33 @@ class AdeeptTankAdapter:
 
         if adeept_move:
             try:
-                # Adeept move module logic
-                # Left track
-                left_dir = 1 if self.left_speed >= 0 else -1
-                left_pwr = abs(self.left_speed)
-                # Right track
-                right_dir = 1 if self.right_speed >= 0 else -1
-                right_pwr = abs(self.right_speed)
-
-                if hasattr(adeept_move, 'motor_left') and hasattr(adeept_move, 'motor_right'):
-                    adeept_move.motor_left(1, left_dir, left_pwr)
-                    adeept_move.motor_right(1, right_dir, right_pwr)
-                elif hasattr(adeept_move, 'motor_run'):
-                    # Some versions have motor_run(direction, speed)
-                    if left_pwr == 0 and right_pwr == 0:
-                        adeept_move.motorStop()
+                # 1. Standard Adeept RaspTank2 move.move(speed, 'forward'/'backward'/'no', 'left'/'right'/'no')
+                if hasattr(adeept_move, 'move'):
+                    if self.left_speed == 0 and self.right_speed == 0:
+                        if hasattr(adeept_move, 'motorStop'):
+                            adeept_move.motorStop()
+                        else:
+                            adeept_move.move(0, 'no', 'no')
                     elif self.left_speed > 0 and self.right_speed > 0:
-                        adeept_move.forward(max(left_pwr, right_pwr))
+                        speed = max(self.left_speed, self.right_speed)
+                        adeept_move.move(speed, 'forward', 'no')
                     elif self.left_speed < 0 and self.right_speed < 0:
-                        adeept_move.backward(max(left_pwr, right_pwr))
+                        speed = max(abs(self.left_speed), abs(self.right_speed))
+                        adeept_move.move(speed, 'backward', 'no')
                     elif self.left_speed < self.right_speed:
-                        adeept_move.left(abs(self.right_speed))
+                        speed = max(abs(self.left_speed), abs(self.right_speed))
+                        adeept_move.move(speed, 'no', 'left')
                     else:
-                        adeept_move.right(abs(self.left_speed))
+                        speed = max(abs(self.left_speed), abs(self.right_speed))
+                        adeept_move.move(speed, 'no', 'right')
+
+                # 2. Dual-motor driver adeept_move.motor_left / motor_right
+                elif hasattr(adeept_move, 'motor_left') and hasattr(adeept_move, 'motor_right'):
+                    left_dir = 1 if self.left_speed >= 0 else -1
+                    right_dir = 1 if self.right_speed >= 0 else -1
+                    adeept_move.motor_left(1, left_dir, abs(self.left_speed))
+                    adeept_move.motor_right(1, right_dir, abs(self.right_speed))
+
             except Exception as e:
                 print(f"[AdeeptAdapter] Motor drive error: {e}")
 

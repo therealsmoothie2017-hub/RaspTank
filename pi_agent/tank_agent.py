@@ -43,11 +43,27 @@ def is_ws_open(ws):
         return getattr(state, "name", "") == "OPEN" or str(state).endswith("OPEN") or state == 1
     return not getattr(ws, "closed", True)
 
+def normalize_ws_url(url):
+    """Auto-correct common URL formatting mistakes (https -> wss, missing scheme, etc.)"""
+    url = (url or "").strip().strip('"').strip("'")
+    if url.startswith("https://"):
+        url = "wss://" + url[8:]
+    elif url.startswith("http://"):
+        url = "ws://" + url[7:]
+    elif not url.startswith("wss://") and not url.startswith("ws://"):
+        url = "wss://" + url
+    
+    # Ensure it ends with /ws endpoint
+    if not url.rstrip("/").endswith("/ws") and "/ws?" not in url:
+        url = url.rstrip("/") + "/ws"
+    return url
+
 class TankAgent:
     def __init__(self, config, is_mock=False):
         self.config = config
-        self.server_url = config.get("server_url", "wss://your-tank-relay.onrender.com/ws")
-        self.tank_secret = config.get("tank_secret", "super-secret-tank-key-1234")
+        raw_url = config.get("server_url", "wss://your-tank-relay.onrender.com/ws")
+        self.server_url = normalize_ws_url(raw_url)
+        self.tank_secret = config.get("tank_secret", "super-secret-tank-key-1234").strip().strip('"').strip("'")
         self.watchdog_timeout = float(config.get("watchdog_timeout_sec", 0.35))
         self.jpeg_quality = int(config.get("camera", {}).get("jpeg_quality", 65))
         self.target_fps = int(config.get("camera", {}).get("fps", 25))
@@ -157,6 +173,8 @@ class TankAgent:
                                 # Motor speeds: left (-100..100), right (-100..100)
                                 left = msg.get("left", 0)
                                 right = msg.get("right", 0)
+                                if left != 0 or right != 0:
+                                    logger.info(f"Steering: Left={left}%, Right={right}%")
                                 self.hw.set_motors(left, right)
                                 self.last_command_time = time.time()
 
