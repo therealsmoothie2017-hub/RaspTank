@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>RaspTank Global Tele-Op Cockpit</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-tactical">
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-badge">TACTICAL TELE-OPERATION</div>
+      <h2>RASPTANK NETHERLANDS</h2>
+      <p class="subtitle">Cloud Relay Telemetry & Control System</p>
+      <form id="join-form">
+        <label>Your Call-Sign / Name:
+          <input type="text" id="username-input" placeholder="e.g. James" required maxlength="16" autofocus>
+        </label>
+        <label>Room Password (if set):
+          <input type="password" id="password-input" placeholder="Leave blank if not set">
+        </label>
+        <button type="submit" class="btn-primary-glow">ENTER COCKPIT</button>
+      </form>
+      <div class="controller-hint">
+        🎮 Connect an Xbox or PlayStation controller via Bluetooth or USB before entering.
+      </div>
+    </div>
+  </div>
+
+  <div class="cockpit-container">
+    <!-- Top HUD Header -->
+    <header class="hud-header">
+      <div class="brand">
+        <div class="brand-radar"></div>
+        <div class="brand-text">
+          <span class="title">RASPTANK-NETHERLANDS</span>
+          <span class="sub" id="tank-status-pill">SEARCHING TANK...</span>
+        </div>
+      </div>
+
+      <div class="driver-bar">
+        <div class="active-pilot-card" id="driver-indicator">
+          <span class="pilot-label">CURRENT DRIVER:</span>
+          <span class="pilot-name" id="current-driver-name">None</span>
+        </div>
+        <button id="btn-take-wheel" class="btn-wheel pulse-ready">
+          <span class="btn-icon">🎮</span>
+          <span class="btn-text">TAKE WHEEL [Y / △]</span>
+        </button>
+      </div>
+
+      <div class="hud-stats">
+        <div class="stat-pill">
+          <span class="label">PING</span>
+          <span class="val" id="stat-ping">-- ms</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">FPS</span>
+          <span class="val" id="stat-fps">--</span>
+        </div>
+        <div class="stat-pill">
+          <span class="label">TEMP</span>
+          <span class="val" id="stat-temp">--°C</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Viewport (Video Stream + Tactical Overlays) -->
+    <main class="hud-main">
+      <div class="video-wrapper">
+        <canvas id="stream-canvas" width="640" height="480"></canvas>
+        
+        <!-- Video Stream Placeholder / Offline screen -->
+        <div id="stream-placeholder" class="stream-offline active">
+          <div class="offline-radar"></div>
+          <p class="offline-title">AWAITING TANK VIDEO SIGNAL</p>
+          <p class="offline-desc">Make sure your friend in the Netherlands has started <code>tank_agent.py</code></p>
+        </div>
+
+        <!-- Cockpit Reticle Overlay -->
+        <div class="hud-crosshair">
+          <div class="reticle-circle"></div>
+          <div class="reticle-lines"></div>
+          <div class="pitch-ladder">
+            <span class="pitch-mark">- 10 -</span>
+            <span class="pitch-mark-center">— 0 —</span>
+            <span class="pitch-mark">- 10 -</span>
+          </div>
+          <div class="drive-vector" id="vector-indicator"></div>
+        </div>
+
+        <!-- Tactical Warnings / Announcements -->
+        <div id="announcement-banner" class="hud-banner"></div>
+
+        <!-- Emergency Brake Button Overlay -->
+        <button id="btn-e-stop" class="hud-estop" title="Emergency Stop (Space / B)">E-STOP</button>
+      </div>
+
+      <!-- Left Control Panel: Telemetry & Drive Modes -->
+      <aside class="hud-sidebar hud-sidebar-left">
+        <div class="panel-card">
+          <h3 class="card-title">DRIVE CONFIG</h3>
+          <div class="toggle-group">
+            <label class="toggle-btn active" id="mode-arcade">
+              <input type="radio" name="drive-mode" value="arcade" checked> Arcade (1-Stick)
+            </label>
+            <label class="toggle-btn" id="mode-tank">
+              <input type="radio" name="drive-mode" value="tank"> Dual-Stick Tank
+            </label>
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>MAX POWER</span>
+              <span id="speed-label">80%</span>
+            </div>
+            <input type="range" id="slider-speed" min="30" max="100" value="80" step="5">
+          </div>
+
+          <div class="slider-group">
+            <div class="slider-header">
+              <span>DEADZONE</span>
+              <span id="deadzone-label">12%</span>
+            </div>
+            <input type="range" id="slider-deadzone" min="5" max="30" value="12" step="1">
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <h3 class="card-title">ACCESSORIES</h3>
+          <div class="btn-grid">
+            <button id="btn-light" class="btn-tool">
+              <span class="icon">💡</span> Headlights [X]
+            </button>
+            <button id="btn-horn" class="btn-tool">
+              <span class="icon">📢</span> Horn [A]
+            </button>
+          </div>
+
+          <div class="camera-ptz">
+            <span class="ptz-title">CAMERA TILT</span>
+            <div class="ptz-controls">
+              <button id="cam-up" class="btn-mini">▲ Up</button>
+              <button id="cam-center" class="btn-mini">● Center</button>
+              <button id="cam-down" class="btn-mini">▼ Down</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Control Panel: Crew Roster & Live Controller Visualizer -->
+      <aside class="hud-sidebar hud-sidebar-right">
+        <div class="panel-card">
+          <h3 class="card-title">CREW ROSTER (<span id="user-count">0</span>/3)</h3>
+          <ul id="crew-list" class="crew-list">
+            <li class="crew-item placeholder">Waiting for friends to join...</li>
+          </ul>
+        </div>
+
+        <div class="panel-card controller-status-card">
+          <h3 class="card-title">GAMEPAD DIAGNOSTIC</h3>
+          <div id="gamepad-status" class="gamepad-badge disconnected">
+            NO CONTROLLER DETECTED
+          </div>
+          <div class="controller-visualizer" id="controller-viz">
+            <!-- Dynamic 3D/SVG Style Controller Diagram -->
+            <div class="stick stick-left">
+              <div class="stick-nub" id="stick-left-nub"></div>
+              <span class="stick-label">L-STICK</span>
+            </div>
+            <div class="stick stick-right">
+              <div class="stick-nub" id="stick-right-nub"></div>
+              <span class="stick-label">R-STICK</span>
+            </div>
+            <div class="trigger-bars">
+              <div class="trig-bar">
+                <span>LT</span>
+                <div class="trig-fill" id="trig-lt-fill"></div>
+              </div>
+              <div class="trig-bar">
+                <span>RT</span>
+                <div class="trig-fill" id="trig-rt-fill"></div>
+              </div>
+            </div>
+          </div>
+          <div class="controller-guide">
+            <small>Plug in Xbox or PlayStation controller & press any button to pair.</small>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom Mobile / Touch Controls Bar (Hidden if Controller is Connected) -->
+    <footer class="hud-footer">
+      <div class="touch-hint">
+        <span>🎮 Gamepad: Left Stick to Steer & Throttle | [Y] Take Wheel | [B] Brake</span>
+        <span>⌨️ Keyboard: WASD / Arrows to Drive | Space for E-Stop</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Audio Cues (Synthesized via Web Audio API, no external mp3 needed!) -->
+  <script src="/static/js/gamepad.js"></script>
+  <script src="/static/js/stream.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,16 @@
+{
+  "server_url": "wss://your-tank-relay.onrender.com/ws",
+  "tank_secret": "super-secret-tank-key-1234",
+  "camera": {
+    "device_index": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 25,
+    "jpeg_quality": 65
+  },
+  "watchdog_timeout_sec": 0.35,
+  "hardware": {
+    "driver": "auto"
+  }
+}
+

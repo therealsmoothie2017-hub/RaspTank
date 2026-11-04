@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: rasptank-relay
+    env: python
+    region: frankfurt # Closest to Netherlands for lowest ping! (or oregon / ohio)
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: TANK_SECRET
+        generateValue: true
+      - key: ACCESS_PASSWORD
+        value: "tank123"
+
